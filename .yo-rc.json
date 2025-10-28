@@ -1,0 +1,18 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "22.21.0",
+    "sdksVersions": {},
+    "version": "1.21.1",
+    "libraryName": "sp-fx-chat",
+    "libraryId": "38e91b24-8d39-47fc-97d8-1ff074643546",
+    "environment": "spo",
+    "packageManager": "npm",
+    "solutionName": "SPFx-Chat",
+    "solutionShortDescription": "SPFx-Chat description",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "componentType": "webpart"
+  }
+}

@@ -8,7 +8,7 @@
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,
     "developer": {
-      "name": "",
+      "name": "Raphael Costa",
       "websiteUrl": "",
       "privacyUrl": "",
       "termsOfUseUrl": "",
@@ -32,6 +32,10 @@
         "id": "6a2604e7-d43d-49c4-b506-4284501e66ae",
         "version": "1.0.0.0"
       }
+    ],
+    "webApiPermissionRequests": [
+      { "resource": "Microsoft Graph", "scope": "Mail.Send"},
+      { "resource": "Microsoft Graph", "scope": "User.ReadBasic.All" }
     ]
   },
   "paths": {

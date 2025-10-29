@@ -1,43 +1,64 @@
-import * as React from 'react';
-import styles from './Chat.module.scss';
-import type { IChatProps } from './IChatProps';
-import { escape } from '@microsoft/sp-lodash-subset';
+import * as React from "react";
+import styles from "./Chat.module.scss";
+import type { IChatMessage } from "../../../models/IChatMessage";
+import { SharePointService } from "../../../services/SharePointService";
+import { SetupService } from "../../../services/SetupService";
+import { GraphService } from "../../../services/GraphService";
+import { MessageList } from "./MessageList";
+import { MessageInput } from "./MessageInput";
+import type { WebPartContext } from "@microsoft/sp-webpart-base";
 
-export default class Chat extends React.Component<IChatProps> {
-  public render(): React.ReactElement<IChatProps> {
-    const {
-      description,
-      isDarkTheme,
-      environmentMessage,
-      hasTeamsContext,
-      userDisplayName
-    } = this.props;
+export interface IChatProps {
+  context: WebPartContext;
+}
 
-    return (
-      <section className={`${styles.chat} ${hasTeamsContext ? styles.teams : ''}`}>
-        <div className={styles.welcome}>
-          <img alt="" src={isDarkTheme ? require('../assets/welcome-dark.png') : require('../assets/welcome-light.png')} className={styles.welcomeImage} />
-          <h2>Well done, {escape(userDisplayName)}!</h2>
-          <div>{environmentMessage}</div>
-          <div>Web part property value: <strong>{escape(description)}</strong></div>
-        </div>
-        <div>
-          <h3>Welcome to SharePoint Framework!</h3>
-          <p>
-            The SharePoint Framework (SPFx) is a extensibility model for Microsoft Viva, Microsoft Teams and SharePoint. It&#39;s the easiest way to extend Microsoft 365 with automatic Single Sign On, automatic hosting and industry standard tooling.
-          </p>
-          <h4>Learn more about SPFx development:</h4>
-          <ul className={styles.links}>
-            <li><a href="https://aka.ms/spfx" target="_blank" rel="noreferrer">SharePoint Framework Overview</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-graph" target="_blank" rel="noreferrer">Use Microsoft Graph in your solution</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-teams" target="_blank" rel="noreferrer">Build for Microsoft Teams using SharePoint Framework</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-viva" target="_blank" rel="noreferrer">Build for Microsoft Viva Connections using SharePoint Framework</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-store" target="_blank" rel="noreferrer">Publish SharePoint Framework applications to the marketplace</a></li>
-            <li><a href="https://aka.ms/spfx-yeoman-api" target="_blank" rel="noreferrer">SharePoint Framework API reference</a></li>
-            <li><a href="https://aka.ms/m365pnp" target="_blank" rel="noreferrer">Microsoft 365 Developer Community</a></li>
-          </ul>
-        </div>
-      </section>
-    );
-  }
+export default function Chat(props: IChatProps) {
+  const { context } = props;
+  const [messages, setMessages] = React.useState<IChatMessage[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const pageInfoRef = React.useRef<{ pageName: string; pageUniqueId: string } | null>(null);
+
+  const load = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // garante que serviços estão inicializados (defensivo)
+      SetupService.init(context);
+      await GraphService.init(context);
+      await SetupService.ensureList();
+
+      const pageInfo = await SharePointService.getPageInfo(context);
+      pageInfoRef.current = pageInfo;
+      const items = await SharePointService.getMessages(pageInfo.pageUniqueId);
+      setMessages(items);
+    } catch (e: any) {
+      setError(e?.message || "Erro ao carregar mensagens");
+    } finally {
+      setLoading(false);
+    }
+  }, [context]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const handleMessageSent = (m: IChatMessage) => {
+    // prepend otimista
+    setMessages(prev => [m, ...prev]);
+  };
+
+  return (
+    <div className={styles.chat}>
+      {error && <div className={styles.error}>⚠️ {error}</div>}
+      <MessageInput
+        context={context}
+        onMessageSent={handleMessageSent}
+        pageInfo={pageInfoRef.current || undefined}
+      />
+      {loading ? (
+        <div className={styles.loading}>A carregar…</div>
+      ) : (
+        <MessageList context={context} messages={messages} />
+      )}
+    </div>
+  );
 }

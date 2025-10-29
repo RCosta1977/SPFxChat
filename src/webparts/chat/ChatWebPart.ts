@@ -6,45 +6,36 @@ import {
   PropertyPaneTextField
 } from '@microsoft/sp-property-pane';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
-import { IReadonlyTheme } from '@microsoft/sp-component-base';
 
 import * as strings from 'ChatWebPartStrings';
 import Chat from './components/Chat';
-import { IChatProps } from './components/IChatProps';
+import { IChatProps } from './components/Chat';
+import { SetupService } from '../../services/SetupService';
+import { GraphService } from '../../services/GraphService';
 
-export interface IChatWebPartProps {
-  description: string;
-}
 
-export default class ChatWebPart extends BaseClientSideWebPart<IChatWebPartProps> {
+export default class ChatWebPart extends BaseClientSideWebPart<{}> {
 
-  private _isDarkTheme: boolean = false;
-  private _environmentMessage: string = '';
-
+  protected async onInit(): Promise<void> {
+    await super.onInit();
+    SetupService.init(this.context);
+    await SetupService.ensureList();
+    await GraphService.init(this.context);
+  }
+  
   public render(): void {
-    const element: React.ReactElement<IChatProps> = React.createElement(
-      Chat,
-      {
-        description: this.properties.description,
-        isDarkTheme: this._isDarkTheme,
-        environmentMessage: this._environmentMessage,
-        hasTeamsContext: !!this.context.sdks.microsoftTeams,
-        userDisplayName: this.context.pageContext.user.displayName
-      }
-    );
+    const element: React.ReactElement<IChatProps> = React.createElement(Chat, {
+        context: this.context
+      } as IChatProps);
 
     ReactDom.render(element, this.domElement);
   }
 
-  protected onInit(): Promise<void> {
-    return this._getEnvironmentMessage().then(message => {
-      this._environmentMessage = message;
-    });
-  }
+  
 
 
 
-  private _getEnvironmentMessage(): Promise<string> {
+  /*private _getEnvironmentMessage(): Promise<string> {
     if (!!this.context.sdks.microsoftTeams) { // running in Teams, office.com or Outlook
       return this.context.sdks.microsoftTeams.teamsJs.app.getContext()
         .then(context => {
@@ -87,7 +78,7 @@ export default class ChatWebPart extends BaseClientSideWebPart<IChatWebPartProps
       this.domElement.style.setProperty('--linkHovered', semanticColors.linkHovered || null);
     }
 
-  }
+  }*/
 
   protected onDispose(): void {
     ReactDom.unmountComponentAtNode(this.domElement);

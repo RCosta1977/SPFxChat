@@ -2,32 +2,42 @@ import * as React from "react";
 import type { IChatMessage } from "../../../models/IChatMessage";
 import type { WebPartContext } from "@microsoft/sp-webpart-base";
 import { AttachmentItem } from "./AttachmentItem";
+import { sanitizeRichText } from "../../../utils/richText";
+import styles from "./Chat.module.scss";
 
 interface Props {
   context: WebPartContext;
   messages: IChatMessage[];
 }
 
-function highlightMentions(text: string): Array<string | JSX.Element> {
-  // realça blocos @Nome com <strong>
-  const parts: Array<string | JSX.Element> = [];
-  const regex = /(^|\s)(@\S+)/g;
-  let lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = regex.exec(text)) !== null) {
-    const start = m.index;
-    if (start > lastIndex) parts.push(text.slice(lastIndex, start));
-    parts.push(m[1] || " ");
-    parts.push(<strong key={start} style={{ fontWeight: 600 }}>{m[2]}</strong>);
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts;
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-export function MessageList({ context, messages }: Props) {
+function buildHtml(text: string): string {
+  if (!text) {
+    return "";
+  }
+
+  const trimmed = text.trim();
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+
+  if (looksLikeHtml) {
+    return sanitizeRichText(trimmed);
+  }
+
+  const escaped = escapeHtml(trimmed).replace(/\r?\n/g, "<br/>");
+  return `<p>${escaped}</p>`;
+}
+
+export function MessageList({ context: _context, messages }: Props): JSX.Element {
   if (!messages?.length) {
-    return <div style={{ opacity: 0.7 }}>Sem mensagens nesta página — sê tu o primeiro a escrever 🙂</div>;
+    return <div style={{ opacity: 0.7 }}>Sem mensagens nesta pagina - seja o primeiro a escrever :)</div>;
   }
 
   return (
@@ -36,11 +46,13 @@ export function MessageList({ context, messages }: Props) {
         <div key={msg.id} style={{ borderBottom: "1px solid #eee", padding: "10px 0" }}>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
             <span style={{ fontWeight: 600 }}>{msg.author.displayName}</span>{" "}
-            <span>• {new Date(msg.created).toLocaleString()}</span>
+            <span>- {new Date(msg.created).toLocaleString()}</span>
           </div>
-          <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>
-            {highlightMentions(msg.text)}
-          </div>
+          <div
+            className={styles.messageContent}
+            style={{ marginTop: 4 }}
+            dangerouslySetInnerHTML={{ __html: buildHtml(msg.text) }}
+          />
           {!!msg.attachments?.length && (
             <div style={{ marginTop: 6 }}>
               {msg.attachments.map(a => (
@@ -53,3 +65,4 @@ export function MessageList({ context, messages }: Props) {
     </div>
   );
 }
+

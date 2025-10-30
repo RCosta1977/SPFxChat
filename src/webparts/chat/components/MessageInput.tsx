@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PrimaryButton, DefaultButton, Stack, Label } from "@fluentui/react";
+import { PrimaryButton, DefaultButton, Stack, Label, IconButton } from "@fluentui/react";
 import type { WebPartContext } from "@microsoft/sp-webpart-base";
 import type { IChatMessage } from "../../../models/IChatMessage";
 import type { IUserMention } from "../../../models/IUserMention";
@@ -8,6 +8,8 @@ import { SharePointService } from "../../../services/SharePointService";
 import { GraphService } from "../../../services/GraphService";
 import { getPageDeepLink } from "../../../utils/pageHelpers";
 import { MentionPicker } from "./MentionPicker";
+import styles from "./Chat.module.scss";
+import { getPlainTextFromHtml, sanitizeRichText } from "../../../utils/richText";
 
 interface Props {
   context: WebPartContext;
@@ -15,8 +17,15 @@ interface Props {
   pageInfo?: { pageName: string; pageUniqueId: string };
 }
 
-export function MessageInput({ context, onMessageSent, pageInfo }: Props) {
-  const [text, setText] = React.useState("");
+interface MentionContext {
+  node: Text;
+  caretOffset: number;
+  tokenLength: number;
+}
+
+export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.Element {
+  const [html, setHtml] = React.useState("");
+  const [plainText, setPlainText] = React.useState("");
   const [members, setMembers] = React.useState<IUserMention[]>([]);
   const [mentions, setMentions] = React.useState<IUserMention[]>([]);
   const [files, setFiles] = React.useState<File[]>([]);
@@ -26,62 +35,113 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props) {
   // mention picker state
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const [pickerQuery, setPickerQuery] = React.useState("");
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = React.useRef<HTMLDivElement | null>(null);
+  const mentionContextRef = React.useRef<MentionContext | null>(null);
 
   React.useEffect(() => {
-    // carregar membros do site (grupo Members)
     SharePointService.getSiteMembers()
       .then(ms => setMembers(ms))
       .catch(() => setMembers([]));
   }, []);
 
-  const onTextChange = (_: any, v?: string) => {
-    const value = v ?? "";
-    setText(value);
+  const focusEditor = React.useCallback((): void => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.addRange(range);
+    }
+  }, []);
 
-    const caret = textareaRef.current?.selectionStart ?? value.length;
-    // detetar a palavra atual onde está o cursor
-    const before = value.slice(0, caret);
-    const token = before.split(/\s/).pop() || "";
+  const detectMentionTrigger = React.useCallback((): void => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      mentionContextRef.current = null;
+      setPickerOpen(false);
+      setPickerQuery("");
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+      mentionContextRef.current = null;
+      setPickerOpen(false);
+      setPickerQuery("");
+      return;
+    }
+
+    const node = range.startContainer as Text;
+    const caretOffset = range.startOffset;
+    const textUntilCaret = node.data.slice(0, caretOffset);
+    const token = textUntilCaret.split(/\s/).pop() ?? "";
+
     if (token.startsWith("@")) {
-      const q = token.slice(1);
-      setPickerQuery(q);
+      mentionContextRef.current = {
+        node,
+        caretOffset,
+        tokenLength: token.length
+      };
+      setPickerQuery(token.slice(1));
       setPickerOpen(true);
     } else {
+      mentionContextRef.current = null;
       setPickerOpen(false);
       setPickerQuery("");
     }
-  };
+  }, []);
 
-  const insertMentionAtCaret = (m: IUserMention) => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const caret = el.selectionStart;
-    const value = text;
-    const before = value.slice(0, caret);
-    const after = value.slice(caret);
-    const tokens = before.split(/\s/);
-    tokens.pop(); // remove o token com '@'
-    const beforeNew = tokens.join(" ");
-    const display = `@${m.displayName}`;
-    const spacer = beforeNew && !beforeNew.endsWith(" ") ? " " : "";
-    const newText = `${beforeNew}${spacer}${display} ${after}`;
-    setText(newText);
+  const insertMentionAtCaret = (mention: IUserMention): void => {
+    const editor = editorRef.current;
+    const ctx = mentionContextRef.current;
+    if (!editor || !ctx) {
+      return;
+    }
+
+    const { node, caretOffset, tokenLength } = ctx;
+    const tokenStart = caretOffset - tokenLength;
+    if (tokenStart < 0) {
+      return;
+    }
+
+    const tokenNode = node.splitText(tokenStart);
+    const afterNode = tokenNode.splitText(tokenLength);
+    tokenNode.remove();
+
+    const mentionSpan = document.createElement("span");
+    mentionSpan.textContent = `@${mention.displayName}`;
+    mentionSpan.setAttribute("data-mention", "true");
+    mentionSpan.setAttribute("data-email", mention.email);
+    mentionSpan.className = styles.mention;
+
+    tokenNode.parentNode?.insertBefore(mentionSpan, afterNode);
+    tokenNode.parentNode?.insertBefore(document.createTextNode(" "), afterNode);
+
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.setStartAfter(mentionSpan);
+      range.collapse(true);
+      selection.addRange(range);
+    }
+
+    setHtml(editor.innerHTML);
+    setPlainText(editor.innerText ?? "");
+    mentionContextRef.current = null;
     setPickerOpen(false);
     setPickerQuery("");
-    // manter menção única
     setMentions(prev =>
-      prev.some(x => x.email.toLowerCase() === m.email.toLowerCase()) ? prev : [...prev, m]
+      prev.some(x => x.email.toLowerCase() === mention.email.toLowerCase()) ? prev : [...prev, mention]
     );
-    // focar de novo
-    setTimeout(() => {
-      el.focus();
-      const newPos = (beforeNew + spacer + display + " ").length;
-      el.setSelectionRange(newPos, newPos);
-    }, 0);
   };
 
-  const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const selected = Array.from(e.target.files || []);
     const invalid = selected.find(f => f.size > 5 * 1024 * 1024);
     if (invalid) {
@@ -89,27 +149,29 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props) {
       return;
     }
     setFiles(prev => [...prev, ...selected]);
-    // reset input
     e.currentTarget.value = "";
   };
 
-  const removeFile = (name: string) => {
+  const removeFile = (name: string): void => {
     setFiles(prev => prev.filter(f => f.name !== name));
   };
 
-  const handleSend = async () => {
-    if (!text.trim() && files.length === 0) {
+  const handleSend = async (): Promise<void> => {
+    const sanitized = sanitizeRichText(html);
+    const plain = getPlainTextFromHtml(sanitized).trim();
+
+    if (!plain && files.length === 0) {
       setError("Escreve uma mensagem ou adiciona um ficheiro.");
       return;
     }
+
     setSending(true);
     setError(null);
 
     try {
-      // info da página
       const info = pageInfo || (await SharePointService.getPageInfo(context));
-      // upload dos ficheiros (pasta {NomeDaPágina})
       let uploaded: IFileAttachment[] = [];
+
       if (files.length) {
         uploaded = await SharePointService.uploadFiles(context, files);
       }
@@ -121,33 +183,34 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props) {
       };
 
       const message: IChatMessage = {
-        text: text.trim(),
+        text: sanitized,
         created: new Date().toISOString(),
         author: currentUser,
-        mentions: mentions,
+        mentions,
         attachments: uploaded,
         pageUniqueId: info.pageUniqueId,
         pageName: info.pageName
       };
 
-      // gravar na lista
       const id = await SharePointService.addMessage(message);
       message.id = id;
 
-      // enviar email aos mencionados (se houver)
       if (mentions.length) {
-        const preview = message.text.slice(0, 200);
+        const preview = plain.slice(0, 200);
         const deepLink = getPageDeepLink(context);
         await GraphService.sendMentionEmails(currentUser.displayName, mentions, preview, deepLink);
       }
 
-      // notificar UI
       onMessageSent(message);
 
-      // reset
-      setText("");
+      setHtml("");
+      setPlainText("");
       setMentions([]);
       setFiles([]);
+      mentionContextRef.current = null;
+      if (editorRef.current) {
+        editorRef.current.innerHTML = "";
+      }
     } catch (e: any) {
       setError(e?.message || "Falha ao enviar a mensagem");
     } finally {
@@ -156,57 +219,97 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props) {
   };
 
   const filteredSuggestions = React.useMemo(() => {
-  if (!pickerOpen) return [];
-  const q = pickerQuery.trim().toLowerCase();
-  const base = members;
-  const filtered = q
-    ? base.filter(m =>
-        m.displayName.toLowerCase().includes(q) ||
-        m.email.toLowerCase().includes(q)
-      )
-    : base;
-  return filtered.slice(0, 8);
-}, [pickerOpen, pickerQuery, members]);
+    if (!pickerOpen) return [];
+    const q = pickerQuery.trim().toLowerCase();
+    const base = members;
+    const filtered = q
+      ? base.filter(m =>
+          m.displayName.toLowerCase().includes(q) ||
+          m.email.toLowerCase().includes(q)
+        )
+      : base;
+    return filtered.slice(0, 8);
+  }, [pickerOpen, pickerQuery, members]);
 
+  const handleEditorInput = (): void => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+    setHtml(editor.innerHTML);
+    setPlainText(editor.innerText ?? "");
+    detectMentionTrigger();
+  };
+
+  const handleEditorKeyUp = (): void => {
+    detectMentionTrigger();
+  };
+
+  const handleEditorMouseUp = (): void => {
+    detectMentionTrigger();
+  };
+
+  const applyCommand = (command: string, value?: string): void => {
+    focusEditor();
+    if (typeof document !== "undefined") {
+      document.execCommand(command, false, value);
+    }
+    handleEditorInput();
+  };
 
   return (
     <Stack tokens={{ childrenGap: 8 }}>
-      {error && <div style={{ color: "#a4262c" }}>⚠️ {error}</div>}
-      <div style={{ position: "relative" }}>
-        <label style={{ display: "block", fontWeight: 600, marginBottom: 4}}>mensagem</label>
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => onTextChange(undefined, e.target.value)}
-          placeholder="Escreva aqui... usa @ para mencionar"
-          rows={4}
-          style={{
-            width:"100%",
-            boxSizing:"border-box",
-            padding:8,
-            border:"1px solid #ddd",
-            borderRadius: 6,
-            resize:"vertical",
-            font:"inherit"
-          }}
+      {error && <div className={styles.errorBanner}>[!] {error}</div>}
+      <div>
+        <label className={styles.editorLabel}>mensagem</label>
+        <Stack horizontal tokens={{ childrenGap: 4 }} styles={{ root: { marginBottom: 6 } }}>
+          <IconButton iconProps={{ iconName: "Bold" }} title="Negrito" ariaLabel="Negrito" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("bold")} />
+          <IconButton iconProps={{ iconName: "Italic" }} title="Italico" ariaLabel="Italico" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("italic")} />
+          <IconButton iconProps={{ iconName: "Underline" }} title="Sublinhado" ariaLabel="Sublinhado" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("underline")} />
+          <IconButton iconProps={{ iconName: "BulletedList" }} title="Lista com marcadores" ariaLabel="Lista com marcadores" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("insertUnorderedList")} />
+          <IconButton iconProps={{ iconName: "NumberedList" }} title="Lista numerada" ariaLabel="Lista numerada" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("insertOrderedList")} />
+          <IconButton iconProps={{ iconName: "Link" }} title="Inserir ligacao" ariaLabel="Inserir ligacao" onMouseDown={e => e.preventDefault()} onClick={() => {
+            const href = prompt("URL da ligacao:");
+            if (href) {
+              applyCommand("createLink", href);
+            }
+          }} />
+          <IconButton iconProps={{ iconName: "ClearFormatting" }} title="Limpar formatacao" ariaLabel="Limpar formatacao" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("removeFormat")} />
+        </Stack>
+        <div className={styles.richEditorWrapper}>
+          {!plainText.trim() && (
+            <div className={styles.richEditorPlaceholder}>
+              Escreva aqui... usa @ para mencionar
+            </div>
+          )}
+          <div
+            ref={editorRef}
+            className={styles.richEditor}
+            contentEditable
+            onInput={handleEditorInput}
+            onKeyUp={handleEditorKeyUp}
+            onMouseUp={handleEditorMouseUp}
+            onBlur={() => setHtml(editorRef.current?.innerHTML ?? "")}
+            role="textbox"
+            aria-multiline="true"
           />
+        </div>
         <MentionPicker
           open={pickerOpen}
-            suggestions={filteredSuggestions}
-            onSelect={insertMentionAtCaret}
+          suggestions={filteredSuggestions}
+          onSelect={insertMentionAtCaret}
         />
       </div>
 
       <Stack horizontal tokens={{ childrenGap: 8 }} verticalAlign="end">
         <div>
-          <Label>Anexos (máx. 5MB cada)</Label>
+          <Label>Anexos (max. 5MB cada)</Label>
           <input type="file" multiple onChange={onFilesPicked} />
           {!!files.length && (
             <ul style={{ margin: "6px 0" }}>
               {files.map(f => (
                 <li key={f.name}>
-                  {f.name} ({Math.round(f.size / 1024)} KB)
-                  {" "}
+                  {f.name} ({Math.round(f.size / 1024)} KB){" "}
                   <DefaultButton
                     text="remover"
                     onClick={() => removeFile(f.name)}
@@ -219,7 +322,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props) {
         </div>
 
         <div style={{ marginLeft: "auto" }}>
-          <PrimaryButton text={sending ? "A enviar…" : "Enviar"} onClick={handleSend} disabled={sending} />
+          <PrimaryButton text={sending ? "A enviar..." : "Enviar"} onClick={handleSend} disabled={sending} />
         </div>
       </Stack>
     </Stack>

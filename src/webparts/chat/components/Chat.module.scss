@@ -37,6 +37,63 @@
   max-width: 420px;
 }
 
+.errorBanner {
+  color: #a4262c;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editorLabel {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.richEditorWrapper {
+  position: relative;
+}
+
+.richEditor {
+  min-height: 120px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font: inherit;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #fff;
+  outline: none;
+}
+
+.richEditor:focus {
+  border-color: #005a9e;
+  box-shadow: 0 0 0 1px rgba(0, 90, 158, 0.2);
+}
+
+.richEditorPlaceholder {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  color: #666;
+  pointer-events: none;
+  font-style: italic;
+}
+
+.mention {
+  background: #e8f3ff;
+  border-radius: 4px;
+  padding: 0 3px;
+  font-weight: 600;
+}
+
+.messageContent {
+  white-space: normal;
+}
+
 .links {
   a {
     text-decoration: none;

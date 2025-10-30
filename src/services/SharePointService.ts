@@ -44,10 +44,31 @@ export class SharePointService {
   }
   
   static async getPageInfo(context: any): Promise<{ pageName: string; pageUniqueId: string; }> {
-    const pageName = context.pageContext?.listItem?.title || document.title || "Página";
-    const pageUniqueId = context.pageContext?.listItem?.uniqueId?.toString() || "";
-    return { pageName, pageUniqueId };
+  // 1) Páginas reais (Site Pages): usa título e UniqueId do item
+  const li = context?.pageContext?.listItem;
+  if (li?.title && li?.uniqueId) {
+    return {
+      pageName: String(li.title),
+      pageUniqueId: String(li.uniqueId)
+    };
   }
+
+  // 2) Workbench ou páginas sem listItem: usa URL como chave estável + título amigável
+  const path =
+    context?.pageContext?.site?.serverRequestPath ||
+    (typeof window !== "undefined" ? (window.location.pathname + window.location.search) : "/");
+
+  const isWorkbench = /\/workbench\.aspx/i.test(path);
+  const pageName =
+    (isWorkbench ? "Workbench" :
+     (context?.pageContext?.web?.title || (typeof document !== "undefined" ? document.title : "Página"))) || "Página";
+
+  // usa o caminho completo como "unique id" textual (campo é texto, não tem problema)
+  const pageUniqueId = path || pageName;
+
+  return { pageName, pageUniqueId };
+}
+
 
   
 
@@ -191,7 +212,7 @@ export class SharePointService {
         "Id,Title,Message,MentionsJson,AttachmentsJson,Created,PageUniqueId,PageName,Author/Id,Author/Title,Author/EMail")
       .expand("Author")
       .filter(`PageUniqueId eq '${pageUniqueId}'`)
-      .orderBy("Id", false)(); // desc
+      .orderBy("Id", true)(); // false = descendente, true = ascendente
 
     return items.map((i: any) => ({
       id: i.Id,

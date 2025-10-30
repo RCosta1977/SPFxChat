@@ -12,24 +12,28 @@ export interface IChatProps {
   context: WebPartContext;
 }
 
-export default function Chat(props: IChatProps) {
-  const { context } = props;
+export default function Chat({ context }: IChatProps) {
   const [messages, setMessages] = React.useState<IChatMessage[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const pageInfoRef = React.useRef<{ pageName: string; pageUniqueId: string } | null>(null);
 
+  const pageInfoRef = React.useRef<{ pageName: string; pageUniqueId: string } | null>(null);
+  const messagesRef = React.useRef<HTMLDivElement | null>(null);
+
+  // carrega mensagens da página
   const load = React.useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      // garante que serviços estão inicializados (defensivo)
+
       SetupService.init(context);
       await GraphService.init(context);
       await SetupService.ensureList();
 
       const pageInfo = await SharePointService.getPageInfo(context);
       pageInfoRef.current = pageInfo;
+
+      // Se quiseres mais recente no fim, garante que o serviço devolve ascendente
       const items = await SharePointService.getMessages(pageInfo.pageUniqueId);
       setMessages(items);
     } catch (e: any) {
@@ -39,26 +43,43 @@ export default function Chat(props: IChatProps) {
     }
   }, [context]);
 
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    void load();
+  }, [load]);
 
+  // autoscroll para o fundo quando o array muda
+  React.useEffect(() => {
+    const el = messagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  // usado no MessageInput
   const handleMessageSent = (m: IChatMessage) => {
-    // prepend otimista
-    setMessages(prev => [m, ...prev]);
+    // acrescenta no fim (mantém a ordem cronológica ascendente)
+    setMessages(prev => [...prev, m]);
   };
 
   return (
     <div className={styles.chat}>
-      {error && <div className={styles.error}>⚠️ {error}</div>}
-      <MessageInput
-        context={context}
-        onMessageSent={handleMessageSent}
-        pageInfo={pageInfoRef.current || undefined}
-      />
+      {error && <div style={{ color: "#a4262c" }}>⚠️ {error}</div>}
+
+      {/* HISTÓRICO EM CIMA */}
       {loading ? (
-        <div className={styles.loading}>A carregar…</div>
+        <div style={{ opacity: 0.7 }}>A carregar…</div>
       ) : (
-        <MessageList context={context} messages={messages} />
+        <div className={styles.messagesContainer} ref={messagesRef}>
+          <MessageList context={context} messages={messages} />
+        </div>
       )}
+
+      {/* INPUT EM BAIXO */}
+      <div className={styles.inputBar}>
+        <MessageInput
+          context={context}
+          onMessageSent={handleMessageSent}
+          pageInfo={pageInfoRef.current || undefined}
+        />
+      </div>
     </div>
   );
 }

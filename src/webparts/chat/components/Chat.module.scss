@@ -1,13 +1,23 @@
 @import '~@fluentui/react/dist/sass/References.scss';
 
 .chat {
-  overflow: hidden;
-  padding: 1em;
-  color: "[theme:bodyText, default: #323130]";
-  color: var(--bodyText);
-  &.teams {
-    font-family: $ms-font-family-fallbacks;
-  }
+  display: flex;
+  flex-direction: column;
+  height: 520px;
+  border: 1px solid #e1e1e1;
+  border-radius: 8px;
+  background: #fff;;
+}
+
+.messagesContainer {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.inputBar {
+  padding: 10px 12px;
 }
 
 .error {

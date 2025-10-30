@@ -2,14 +2,11 @@ import * as React from "react";
 import type { IUserMention } from "../../../models/IUserMention";
 
 interface Props {
-  open: boolean;
   suggestions: IUserMention[];
   onSelect: (m: IUserMention) => void;
 }
 
-export function MentionPicker({ open, suggestions, onSelect }: Props) {
-  if (!open || suggestions.length === 0) return null;
-
+export function MentionPicker({ suggestions, onSelect }: Props): JSX.Element {
   return (
     <div
       style={{

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PrimaryButton, DefaultButton, Stack, Label, IconButton } from "@fluentui/react";
+import { PrimaryButton, DefaultButton, Stack, Label, IconButton, Callout } from "@fluentui/react";
 import type { WebPartContext } from "@microsoft/sp-webpart-base";
 import type { IChatMessage } from "../../../models/IChatMessage";
 import type { IUserMention } from "../../../models/IUserMention";
@@ -23,6 +23,25 @@ interface MentionContext {
   tokenLength: number;
 }
 
+const EMOJI_SET: string[] = [
+  "😀",
+  "😁",
+  "😂",
+  "🤣",
+  "😊",
+  "😍",
+  "😎",
+  "🤔",
+  "😢",
+  "😡",
+  "👏",
+  "👍",
+  "🙏",
+  "🎉",
+  "🔥",
+  "💡"
+];
+
 export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.Element {
   const [html, setHtml] = React.useState("");
   const [plainText, setPlainText] = React.useState("");
@@ -37,6 +56,9 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
   const [pickerQuery, setPickerQuery] = React.useState("");
   const editorRef = React.useRef<HTMLDivElement | null>(null);
   const mentionContextRef = React.useRef<MentionContext | null>(null);
+  const emojiAnchorRef = React.useRef<HTMLDivElement | null>(null);
+  const savedRangeRef = React.useRef<Range | null>(null);
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
 
   React.useEffect(() => {
     SharePointService.getSiteMembers()
@@ -111,6 +133,10 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
 
     const tokenNode = node.splitText(tokenStart);
     const afterNode = tokenNode.splitText(tokenLength);
+    const parent =
+      afterNode.parentNode ||
+      tokenNode.parentNode ||
+      editor;
     tokenNode.remove();
 
     const mentionSpan = document.createElement("span");
@@ -119,8 +145,16 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     mentionSpan.setAttribute("data-email", mention.email);
     mentionSpan.className = styles.mention;
 
-    tokenNode.parentNode?.insertBefore(mentionSpan, afterNode);
-    tokenNode.parentNode?.insertBefore(document.createTextNode(" "), afterNode);
+    const spacer = document.createTextNode(" ");
+    if (parent) {
+      if (afterNode && parent.contains(afterNode)) {
+        parent.insertBefore(mentionSpan, afterNode);
+        parent.insertBefore(spacer, afterNode);
+      } else {
+        parent.appendChild(mentionSpan);
+        parent.appendChild(spacer);
+      }
+    }
 
     const selection = window.getSelection();
     if (selection) {
@@ -139,6 +173,52 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     setMentions(prev =>
       prev.some(x => x.email.toLowerCase() === mention.email.toLowerCase()) ? prev : [...prev, mention]
     );
+  };
+
+  const handleEditorInput = (): void => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+    setHtml(editor.innerHTML);
+    setPlainText(editor.innerText ?? "");
+    detectMentionTrigger();
+  };
+
+  const handleEmojiButtonClick = (): void => {
+    if (emojiOpen) {
+      setEmojiOpen(false);
+      savedRangeRef.current = null;
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      focusEditor();
+    }
+    const activeSelection = window.getSelection();
+    if (activeSelection && activeSelection.rangeCount > 0) {
+      savedRangeRef.current = activeSelection.getRangeAt(0).cloneRange();
+    }
+    setEmojiOpen(true);
+  };
+
+  const insertEmoji = (emoji: string): void => {
+    focusEditor();
+
+    const selection = window.getSelection();
+    const range = savedRangeRef.current;
+    if (selection && range) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    if (typeof document !== "undefined") {
+      document.execCommand("insertText", false, emoji);
+    }
+    savedRangeRef.current = null;
+    setEmojiOpen(false);
+    handleEditorInput();
   };
 
   const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -208,11 +288,14 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       setMentions([]);
       setFiles([]);
       mentionContextRef.current = null;
+      savedRangeRef.current = null;
+      setEmojiOpen(false);
       if (editorRef.current) {
         editorRef.current.innerHTML = "";
       }
-    } catch (e: any) {
-      setError(e?.message || "Falha ao enviar a mensagem");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Falha ao enviar a mensagem";
+      setError(message);
     } finally {
       setSending(false);
     }
@@ -230,16 +313,6 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       : base;
     return filtered.slice(0, 8);
   }, [pickerOpen, pickerQuery, members]);
-
-  const handleEditorInput = (): void => {
-    const editor = editorRef.current;
-    if (!editor) {
-      return;
-    }
-    setHtml(editor.innerHTML);
-    setPlainText(editor.innerText ?? "");
-    detectMentionTrigger();
-  };
 
   const handleEditorKeyUp = (): void => {
     detectMentionTrigger();
@@ -275,7 +348,41 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
             }
           }} />
           <IconButton iconProps={{ iconName: "ClearFormatting" }} title="Limpar formatacao" ariaLabel="Limpar formatacao" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("removeFormat")} />
+          <div ref={emojiAnchorRef}>
+            <IconButton
+              iconProps={{ iconName: "Emoji2" }}
+              title="Inserir emoji"
+              ariaLabel="Inserir emoji"
+              onMouseDown={e => e.preventDefault()}
+              onClick={handleEmojiButtonClick}
+            />
+          </div>
         </Stack>
+        {emojiOpen && (
+          <Callout
+            target={emojiAnchorRef.current}
+            onDismiss={() => {
+              setEmojiOpen(false);
+              savedRangeRef.current = null;
+            }}
+            setInitialFocus
+            role="dialog"
+            gapSpace={4}
+          >
+            <div className={styles.emojiGrid}>
+              {EMOJI_SET.map(symbol => (
+                <button
+                  key={symbol}
+                  type="button"
+                  className={styles.emojiButton}
+                  onClick={() => insertEmoji(symbol)}
+                >
+                  {symbol}
+                </button>
+              ))}
+            </div>
+          </Callout>
+        )}
         <div className={styles.richEditorWrapper}>
           {!plainText.trim() && (
             <div className={styles.richEditorPlaceholder}>
@@ -294,11 +401,12 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
             aria-multiline="true"
           />
         </div>
-        <MentionPicker
-          open={pickerOpen}
-          suggestions={filteredSuggestions}
-          onSelect={insertMentionAtCaret}
-        />
+        {pickerOpen && filteredSuggestions.length > 0 && (
+          <MentionPicker
+            suggestions={filteredSuggestions}
+            onSelect={insertMentionAtCaret}
+          />
+        )}
       </div>
 
       <Stack horizontal tokens={{ childrenGap: 8 }} verticalAlign="end">

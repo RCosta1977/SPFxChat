@@ -12,7 +12,7 @@ export interface IChatProps {
   context: WebPartContext;
 }
 
-export default function Chat({ context }: IChatProps) {
+export default function Chat({ context }: IChatProps): JSX.Element {
   const [messages, setMessages] = React.useState<IChatMessage[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -21,7 +21,7 @@ export default function Chat({ context }: IChatProps) {
   const messagesRef = React.useRef<HTMLDivElement | null>(null);
 
   // carrega mensagens da página
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
@@ -36,15 +36,18 @@ export default function Chat({ context }: IChatProps) {
       // Se quiseres mais recente no fim, garante que o serviço devolve ascendente
       const items = await SharePointService.getMessages(pageInfo.pageUniqueId);
       setMessages(items);
-    } catch (e: any) {
-      setError(e?.message || "Erro ao carregar mensagens");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erro ao carregar mensagens";
+      setError(message);
     } finally {
       setLoading(false);
     }
   }, [context]);
 
   React.useEffect(() => {
-    void load();
+    load().catch(() => {
+      /* erros já tratados dentro de load */
+    });
   }, [load]);
 
   // autoscroll para o fundo quando o array muda
@@ -54,9 +57,9 @@ export default function Chat({ context }: IChatProps) {
   }, [messages]);
 
   // usado no MessageInput
-  const handleMessageSent = (m: IChatMessage) => {
+  const handleMessageSent = (message: IChatMessage): void => {
     // acrescenta no fim (mantém a ordem cronológica ascendente)
-    setMessages(prev => [...prev, m]);
+    setMessages(prev => [...prev, message]);
   };
 
   return (

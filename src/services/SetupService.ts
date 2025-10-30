@@ -11,11 +11,11 @@ import type { IView } from "@pnp/sp/views";
 export class SetupService {
   private static _sp: ReturnType<typeof spfi>;
 
-  static init(context: WebPartContext) {
+  static init(context: WebPartContext): void {
     this._sp = spfi().using(SPFx(context));
   }
 
-  static sp() {
+  static sp(): ReturnType<typeof spfi> {
     if (!this._sp) throw new Error("PnPjs not initialized");
     return this._sp;
   }
@@ -34,8 +34,9 @@ export class SetupService {
     await list.fields.addText("PageUniqueId");
     await list.fields.addText("PageName");
   } else {
-    const fields = await list.fields.select("InternalName")();
-    const have = new Set(fields.map((f: any) => f.InternalName));
+    type FieldInfo = { InternalName: string };
+    const fields = await list.fields.select("InternalName")() as FieldInfo[];
+    const have = new Set(fields.map(f => f.InternalName));
     if (!have.has("Message")) await list.fields.addMultilineText("Message");
     if (!have.has("MentionsJson")) await list.fields.addText("MentionsJson");
     if (!have.has("AttachmentsJson")) await list.fields.addText("AttachmentsJson");

@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { IFileAttachment } from "../../../models/IFileAttachment";
 
-export function AttachmentItem({ attachment }: { attachment: IFileAttachment }) {
+export function AttachmentItem({ attachment }: { attachment: IFileAttachment }): React.ReactElement {
   const sizeKb = Math.max(1, Math.round(attachment.size / 1024));
   return (
     <a
@@ -19,7 +19,8 @@ export function AttachmentItem({ attachment }: { attachment: IFileAttachment }) 
       }}
       title={attachment.name}
     >
-      📎 {attachment.name} — {sizeKb} KB
+      [ficheiro] {attachment.name} - {sizeKb} KB
     </a>
   );
 }
+

@@ -109,8 +109,9 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
         caretOffset,
         tokenLength: token.length
       };
-      setPickerQuery(token.slice(1));
-      setPickerOpen(true);
+      const query = token.slice(1);
+      setPickerQuery(query);
+      setPickerOpen(query.length > 0);
     } else {
       mentionContextRef.current = null;
       setPickerOpen(false);
@@ -144,15 +145,23 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     mentionSpan.setAttribute("data-mention", "true");
     mentionSpan.setAttribute("data-email", mention.email);
     mentionSpan.className = styles.mention;
+    mentionSpan.contentEditable = "false";
 
-    const spacer = document.createTextNode(" ");
+    const existingLeadingSpace =
+      afterNode?.nodeType === Node.TEXT_NODE &&
+      /^\s/.test((afterNode.textContent ?? ""));
+    const spacer = existingLeadingSpace ? null : document.createTextNode(" ");
     if (parent) {
       if (afterNode && parent.contains(afterNode)) {
         parent.insertBefore(mentionSpan, afterNode);
-        parent.insertBefore(spacer, afterNode);
+        if (spacer) {
+          parent.insertBefore(spacer, afterNode);
+        }
       } else {
         parent.appendChild(mentionSpan);
-        parent.appendChild(spacer);
+        if (spacer) {
+          parent.appendChild(spacer);
+        }
       }
     }
 
@@ -160,7 +169,16 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     if (selection) {
       selection.removeAllRanges();
       const range = document.createRange();
-      range.setStartAfter(mentionSpan);
+      const targetNode = spacer ?? afterNode;
+      if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
+        const textNode = targetNode as Text;
+        const offset = spacer ? textNode.data.length : 0;
+        range.setStart(textNode, offset);
+      } else {
+        const fallback = document.createTextNode(" ");
+        mentionSpan.parentNode?.insertBefore(fallback, mentionSpan.nextSibling);
+        range.setStart(fallback, fallback.data.length);
+      }
       range.collapse(true);
       selection.addRange(range);
     }

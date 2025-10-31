@@ -4,37 +4,20 @@
   display: flex;
   flex-direction: column;
   height: 520px;
-  border: 1px solid #e1e1e1;
+  border: 1px solid var(--chat-border-color, #e1e1e1);
   border-radius: 8px;
-  background: #fff;;
+  background: #fff;
 }
 
 .messagesContainer {
   flex: 1 1 auto;
   overflow: auto;
   padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--chat-border-color, #f0f0f0);
 }
 
 .inputBar {
   padding: 10px 12px;
-}
-
-.error {
-  color: #a4262c;
-}
-
-.loading {
-  opacity: .7;
-}
-
-.welcome {
-  text-align: center;
-}
-
-.welcomeImage {
-  width: 100%;
-  max-width: 420px;
 }
 
 .errorBanner {
@@ -42,6 +25,12 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.themeError {
+  color: #a4262c;
+  margin: 6px 12px;
+  font-weight: 600;
 }
 
 .editorLabel {
@@ -59,7 +48,7 @@
   width: 100%;
   box-sizing: border-box;
   padding: 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--chat-border-color, #ddd);
   border-radius: 6px;
   font: inherit;
   line-height: 1.4;
@@ -70,8 +59,8 @@
 }
 
 .richEditor:focus {
-  border-color: #005a9e;
-  box-shadow: 0 0 0 1px rgba(0, 90, 158, 0.2);
+  border-color: var(--chat-button-bg, #005a9e);
+  box-shadow: 0 0 0 1px rgba(0, 90, 158, 0.15);
 }
 
 .richEditorPlaceholder {
@@ -84,14 +73,42 @@
 }
 
 .mention {
-  background: #e8f3ff;
+  background: var(--chat-mention-bg, #e8f3ff);
   border-radius: 4px;
   padding: 0 3px;
   font-weight: 600;
+  color: var(--chat-mention-text, #004578);
 }
 
 .messageContent {
   white-space: normal;
+  margin-top: 4px;
+}
+
+.messageItem {
+  border-bottom: 1px solid var(--chat-message-border, #eee);
+  padding: 12px 0;
+}
+
+.ownMessage {
+  background: var(--chat-self-background, #f3f2f1);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 6px -12px;
+  border: 1px solid var(--chat-border-color, transparent);
+}
+
+.messageMeta {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.messageAuthor {
+  font-weight: 600;
+}
+
+.messageAttachments {
+  margin-top: 6px;
 }
 
 .emojiGrid {

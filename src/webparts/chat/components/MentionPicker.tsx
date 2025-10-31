@@ -16,7 +16,7 @@ export function MentionPicker({ suggestions, onSelect }: Props): JSX.Element {
         top: "100%",
         zIndex: 10,
         background: "white",
-        border: "1px solid #ddd",
+        border: "1px solid var(--chat-border-color, #ddd)",
         borderRadius: 6,
         boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
         marginTop: 4,

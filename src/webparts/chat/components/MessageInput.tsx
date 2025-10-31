@@ -1,5 +1,6 @@
 import * as React from "react";
 import { PrimaryButton, DefaultButton, Stack, Label, IconButton, Callout } from "@fluentui/react";
+import type { IButtonStyles } from "@fluentui/react";
 import type { WebPartContext } from "@microsoft/sp-webpart-base";
 import type { IChatMessage } from "../../../models/IChatMessage";
 import type { IUserMention } from "../../../models/IUserMention";
@@ -80,6 +81,40 @@ function hasRichFormatting(html: string): boolean {
 
   return false;
 }
+
+const primaryButtonStyles: IButtonStyles = {
+  root: {
+    backgroundColor: "var(--chat-button-bg)",
+    borderColor: "var(--chat-button-bg)",
+    color: "var(--chat-button-text)"
+  },
+  rootHovered: {
+    backgroundColor: "var(--chat-button-bg)",
+    borderColor: "var(--chat-button-bg)",
+    color: "var(--chat-button-text)",
+    filter: "brightness(0.95)"
+  },
+  rootPressed: {
+    backgroundColor: "var(--chat-button-bg)",
+    borderColor: "var(--chat-button-bg)",
+    color: "var(--chat-button-text)",
+    filter: "brightness(0.9)"
+  }
+};
+
+const removeAttachmentButtonStyles: IButtonStyles = {
+  root: {
+    borderColor: "var(--chat-border-color)",
+    color: "inherit",
+    height: 22,
+    padding: "0 6px",
+    marginLeft: 6
+  },
+  rootHovered: {
+    borderColor: "var(--chat-button-bg)",
+    color: "var(--chat-button-bg)"
+  }
+};
 
 export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.Element {
   const [html, setHtml] = React.useState("");
@@ -509,7 +544,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
                   <DefaultButton
                     text="remover"
                     onClick={() => removeFile(f.name)}
-                    styles={{ root: { height: 22, padding: "0 6px", marginLeft: 6 } }}
+                    styles={removeAttachmentButtonStyles}
                   />
                 </li>
               ))}
@@ -518,9 +553,15 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
         </div>
 
         <div style={{ marginLeft: "auto" }}>
-          <PrimaryButton text={sending ? "A enviar..." : "Enviar"} onClick={handleSend} disabled={sending} />
+          <PrimaryButton
+            text={sending ? "A enviar..." : "Enviar"}
+            onClick={handleSend}
+            disabled={sending}
+            styles={primaryButtonStyles}
+          />
         </div>
       </Stack>
     </Stack>
   );
 }
+

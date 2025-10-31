@@ -12,10 +12,11 @@ export function AttachmentItem({ attachment }: { attachment: IFileAttachment }):
         display: "inline-block",
         fontSize: 12,
         padding: "4px 8px",
-        border: "1px solid #ddd",
+        border: "1px solid var(--chat-border-color, #ddd)",
         borderRadius: 6,
         marginRight: 6,
-        textDecoration: "none"
+        textDecoration: "none",
+        color: "inherit"
       }}
       title={attachment.name}
     >
@@ -23,4 +24,3 @@ export function AttachmentItem({ attachment }: { attachment: IFileAttachment }):
     </a>
   );
 }
-

@@ -1,7 +1,15 @@
 declare interface IChatWebPartStrings {
   PropertyPaneDescription: string;
   BasicGroupName: string;
-  DescriptionFieldLabel: string;
+  UseSiteThemeLabel: string;
+  PrimaryButtonColorLabel: string;
+  PrimaryButtonTextColorLabel: string;
+  SurfaceBorderColorLabel: string;
+  MessageBorderColorLabel: string;
+  SelfMessageBackgroundColorLabel: string;
+  MentionBackgroundColorLabel: string;
+  MentionTextColorLabel: string;
+  ColorHelpText: string;
   AppLocalEnvironmentSharePoint: string;
   AppLocalEnvironmentTeams: string;
   AppLocalEnvironmentOffice: string;

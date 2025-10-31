@@ -116,6 +116,34 @@ const removeAttachmentButtonStyles: IButtonStyles = {
   }
 };
 
+const toolbarButtonStyles: IButtonStyles = {
+  root: {
+    borderRadius: 4,
+    color: "inherit"
+  },
+  rootHovered: {
+    backgroundColor: "rgba(0,0,0,0.05)"
+  },
+  rootChecked: {
+    backgroundColor: "rgba(0,0,0,0.12)",
+    color: "var(--chat-button-bg)"
+  },
+  rootPressed: {
+    backgroundColor: "rgba(0,0,0,0.18)"
+  }
+};
+
+const fileTriggerButtonStyles: IButtonStyles = {
+  root: {
+    borderColor: "var(--chat-border-color)",
+    color: "inherit"
+  },
+  rootHovered: {
+    borderColor: "var(--chat-button-bg)",
+    color: "var(--chat-button-bg)"
+  }
+};
+
 export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.Element {
   const [html, setHtml] = React.useState("");
   const [plainText, setPlainText] = React.useState("");
@@ -134,6 +162,38 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
   const savedRangeRef = React.useRef<Range | null>(null);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [hasFormatting, setHasFormatting] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [formatState, setFormatState] = React.useState({
+    bold: false,
+    italic: false,
+    underline: false,
+    unorderedList: false,
+    orderedList: false
+  });
+
+  const updateFormattingState = React.useCallback((): void => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      setFormatState({
+        bold: false,
+        italic: false,
+        underline: false,
+        unorderedList: false,
+        orderedList: false
+      });
+      return;
+    }
+    setFormatState({
+      bold: document.queryCommandState("bold"),
+      italic: document.queryCommandState("italic"),
+      underline: document.queryCommandState("underline"),
+      unorderedList: document.queryCommandState("insertUnorderedList"),
+      orderedList: document.queryCommandState("insertOrderedList")
+    });
+  }, []);
 
   React.useEffect(() => {
     SharePointService.getSiteMembers()
@@ -154,9 +214,11 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       range.collapse(false);
       selection?.addRange(range);
     }
-  }, []);
+    updateFormattingState();
+  }, [updateFormattingState]);
 
   const detectMentionTrigger = React.useCallback((): void => {
+    updateFormattingState();
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
       mentionContextRef.current = null;
@@ -192,7 +254,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       setPickerOpen(false);
       setPickerQuery("");
     }
-  }, []);
+  }, [updateFormattingState]);
 
   const insertMentionAtCaret = (mention: IUserMention): void => {
     const editor = editorRef.current;
@@ -262,6 +324,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     setHtml(currentHtml);
     setPlainText(editor.innerText ?? "");
     setHasFormatting(true);
+    updateFormattingState();
     mentionContextRef.current = null;
     setPickerOpen(false);
     setPickerQuery("");
@@ -280,6 +343,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     setPlainText(editor.innerText ?? "");
     const sanitized = sanitizeRichText(currentHtml);
     setHasFormatting(hasRichFormatting(sanitized));
+    updateFormattingState();
     detectMentionTrigger();
   };
 
@@ -317,6 +381,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     savedRangeRef.current = null;
     setEmojiOpen(false);
     handleEditorInput();
+    updateFormattingState();
   };
 
   const onFilesPicked = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -389,6 +454,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       savedRangeRef.current = null;
       setEmojiOpen(false);
       setHasFormatting(false);
+      updateFormattingState();
       if (editorRef.current) {
         editorRef.current.innerHTML = "";
       }
@@ -415,10 +481,12 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
 
   const handleEditorKeyUp = (): void => {
     detectMentionTrigger();
+    updateFormattingState();
   };
 
   const handleEditorMouseUp = (): void => {
     detectMentionTrigger();
+    updateFormattingState();
   };
 
   const applyCommand = (command: string, value?: string): void => {
@@ -427,6 +495,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       document.execCommand(command, false, value);
     }
     handleEditorInput();
+    updateFormattingState();
   };
 
   const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -458,18 +527,18 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       <div>
         <label className={styles.editorLabel}>mensagem</label>
         <Stack horizontal tokens={{ childrenGap: 4 }} styles={{ root: { marginBottom: 6 } }}>
-          <IconButton iconProps={{ iconName: "Bold" }} title="Negrito" ariaLabel="Negrito" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("bold")} />
-          <IconButton iconProps={{ iconName: "Italic" }} title="Italico" ariaLabel="Italico" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("italic")} />
-          <IconButton iconProps={{ iconName: "Underline" }} title="Sublinhado" ariaLabel="Sublinhado" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("underline")} />
-          <IconButton iconProps={{ iconName: "BulletedList" }} title="Lista com marcadores" ariaLabel="Lista com marcadores" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("insertUnorderedList")} />
-          <IconButton iconProps={{ iconName: "NumberedList" }} title="Lista numerada" ariaLabel="Lista numerada" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("insertOrderedList")} />
+          <IconButton iconProps={{ iconName: "Bold" }} title="Negrito" ariaLabel="Negrito" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("bold")} checked={formatState.bold} styles={toolbarButtonStyles} />
+          <IconButton iconProps={{ iconName: "Italic" }} title="Italico" ariaLabel="Italico" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("italic")} checked={formatState.italic} styles={toolbarButtonStyles} />
+          <IconButton iconProps={{ iconName: "Underline" }} title="Sublinhado" ariaLabel="Sublinhado" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("underline")} checked={formatState.underline} styles={toolbarButtonStyles} />
+          <IconButton iconProps={{ iconName: "BulletedList" }} title="Lista com marcadores" ariaLabel="Lista com marcadores" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("insertUnorderedList")} checked={formatState.unorderedList} styles={toolbarButtonStyles} />
+          <IconButton iconProps={{ iconName: "NumberedList" }} title="Lista numerada" ariaLabel="Lista numerada" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("insertOrderedList")} checked={formatState.orderedList} styles={toolbarButtonStyles} />
           <IconButton iconProps={{ iconName: "Link" }} title="Inserir ligacao" ariaLabel="Inserir ligacao" onMouseDown={e => e.preventDefault()} onClick={() => {
             const href = prompt("URL da ligacao:");
             if (href) {
               applyCommand("createLink", href);
             }
-          }} />
-          <IconButton iconProps={{ iconName: "ClearFormatting" }} title="Limpar formatacao" ariaLabel="Limpar formatacao" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("removeFormat")} />
+          }} styles={toolbarButtonStyles} />
+          <IconButton iconProps={{ iconName: "ClearFormatting" }} title="Limpar formatacao" ariaLabel="Limpar formatacao" onMouseDown={e => e.preventDefault()} onClick={() => applyCommand("removeFormat")} styles={toolbarButtonStyles} />
           <div ref={emojiAnchorRef}>
             <IconButton
               iconProps={{ iconName: "Emoji2" }}
@@ -477,6 +546,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
               ariaLabel="Inserir emoji"
               onMouseDown={e => e.preventDefault()}
               onClick={handleEmojiButtonClick}
+              styles={toolbarButtonStyles}
             />
           </div>
         </Stack>
@@ -535,7 +605,20 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       <Stack horizontal tokens={{ childrenGap: 8 }} verticalAlign="end">
         <div>
           <Label>Anexos (max. 5MB cada)</Label>
-          <input type="file" multiple onChange={onFilesPicked} />
+          <div className={styles.fileInputRow}>
+            <DefaultButton
+              text="Escolher ficheiros"
+              onClick={() => fileInputRef.current?.click()}
+              styles={fileTriggerButtonStyles}
+            />
+            <input
+              ref={fileInputRef}
+              className={styles.fileInput}
+              type="file"
+              multiple
+              onChange={onFilesPicked}
+            />
+          </div>
           {!!files.length && (
             <ul style={{ margin: "6px 0" }}>
               {files.map(f => (
@@ -564,4 +647,5 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     </Stack>
   );
 }
+
 

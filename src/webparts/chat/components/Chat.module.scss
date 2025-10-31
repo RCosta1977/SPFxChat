@@ -137,6 +137,17 @@
   outline: none;
 }
 
+.fileInputRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.fileInput {
+  display: none;
+}
+
 .links {
   a {
     text-decoration: none;

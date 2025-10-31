@@ -112,7 +112,7 @@ export default function Chat({ context, theme }: IChatProps): JSX.Element {
 
   return (
     <div className={styles.chat} style={rootThemeStyle}>
-      {error && <div className={styles.themeError}>⚠️ {error}</div>}
+      {error && <div className={styles.themeError}>[!] {error}</div>}
 
       {loading ? (
         <div style={{ opacity: 0.7 }}>A carregar.</div>
@@ -132,3 +132,4 @@ export default function Chat({ context, theme }: IChatProps): JSX.Element {
     </div>
   );
 }
+

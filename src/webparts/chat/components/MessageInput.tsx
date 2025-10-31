@@ -42,6 +42,45 @@ const EMOJI_SET: string[] = [
   "💡"
 ];
 
+function hasRichFormatting(html: string): boolean {
+  if (!html) {
+    return false;
+  }
+
+  if (typeof document === "undefined") {
+    return /<(strong|b|em|i|u|ul|ol|li|a|span)/i.test(html);
+  }
+
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT);
+
+  while (walker.nextNode()) {
+    const el = walker.currentNode as HTMLElement;
+    switch (el.tagName) {
+      case "STRONG":
+      case "B":
+      case "EM":
+      case "I":
+      case "U":
+      case "UL":
+      case "OL":
+      case "LI":
+      case "A":
+        return true;
+      case "SPAN":
+        if (el.getAttribute("data-mention")) {
+          return true;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return false;
+}
+
 export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.Element {
   const [html, setHtml] = React.useState("");
   const [plainText, setPlainText] = React.useState("");
@@ -59,6 +98,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
   const emojiAnchorRef = React.useRef<HTMLDivElement | null>(null);
   const savedRangeRef = React.useRef<Range | null>(null);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const [hasFormatting, setHasFormatting] = React.useState(false);
 
   React.useEffect(() => {
     SharePointService.getSiteMembers()
@@ -183,8 +223,10 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       selection.addRange(range);
     }
 
-    setHtml(editor.innerHTML);
+    const currentHtml = editor.innerHTML;
+    setHtml(currentHtml);
     setPlainText(editor.innerText ?? "");
+    setHasFormatting(true);
     mentionContextRef.current = null;
     setPickerOpen(false);
     setPickerQuery("");
@@ -198,8 +240,11 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     if (!editor) {
       return;
     }
-    setHtml(editor.innerHTML);
+    const currentHtml = editor.innerHTML;
+    setHtml(currentHtml);
     setPlainText(editor.innerText ?? "");
+    const sanitized = sanitizeRichText(currentHtml);
+    setHasFormatting(hasRichFormatting(sanitized));
     detectMentionTrigger();
   };
 
@@ -308,6 +353,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       mentionContextRef.current = null;
       savedRangeRef.current = null;
       setEmojiOpen(false);
+      setHasFormatting(false);
       if (editorRef.current) {
         editorRef.current.innerHTML = "";
       }
@@ -346,6 +392,29 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       document.execCommand(command, false, value);
     }
     handleEditorInput();
+  };
+
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      if (pickerOpen || emojiOpen) {
+        return;
+      }
+      if (sending) {
+        event.preventDefault();
+        return;
+      }
+      const hasContent = plainText.trim().length > 0 || files.length > 0;
+      if (!hasFormatting && hasContent) {
+        event.preventDefault();
+        handleSend().catch(() => undefined);
+      }
+    }
   };
 
   return (
@@ -411,6 +480,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
             ref={editorRef}
             className={styles.richEditor}
             contentEditable
+            onKeyDown={handleEditorKeyDown}
             onInput={handleEditorInput}
             onKeyUp={handleEditorKeyUp}
             onMouseUp={handleEditorMouseUp}

@@ -27,9 +27,16 @@ function buildHtml(text: string): string {
 
   const trimmed = text.trim();
   const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+  const containsNumericEntity = /&#(?:x?[0-9a-f]+);/i.test(trimmed);
 
-  if (looksLikeHtml) {
-    return sanitizeRichText(trimmed);
+  if (looksLikeHtml || containsNumericEntity) {
+    const sanitized = sanitizeRichText(trimmed);
+    const sanitizedHasTags = /<\/?[a-z][\s\S]*>/i.test(sanitized);
+    if (sanitizedHasTags) {
+      return sanitized;
+    }
+    const normalized = sanitized.replace(/\r?\n/g, "<br/>");
+    return normalized ? `<p>${normalized}</p>` : "";
   }
 
   const escaped = escapeHtml(trimmed).replace(/\r?\n/g, "<br/>");

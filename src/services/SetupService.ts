@@ -21,45 +21,38 @@ export class SetupService {
   }
 
   static async ensureList(): Promise<void> {
-  const sp = this.sp();
-  const listTitle = "Chat Messages";
+    const sp = this.sp();
+    const listTitle = "Chat Messages";
 
-  const ensure = await sp.web.lists.ensure(listTitle, "", 100);
-  const list = sp.web.lists.getByTitle(listTitle);
+    const ensure = await sp.web.lists.ensure(listTitle, "", 100);
+    const list = sp.web.lists.getByTitle(listTitle);
 
-  if (ensure.created) {
-    await list.fields.addMultilineText("Message");
-    await list.fields.addText("MentionsJson");
-    await list.fields.addText("AttachmentsJson");
-    await list.fields.addText("PageUniqueId");
-    await list.fields.addText("PageName");
-  } else {
-    type FieldInfo = { InternalName: string };
-    const fields = await list.fields.select("InternalName")() as FieldInfo[];
-    const have = new Set(fields.map(f => f.InternalName));
-    if (!have.has("Message")) await list.fields.addMultilineText("Message");
-    if (!have.has("MentionsJson")) await list.fields.addText("MentionsJson");
-    if (!have.has("AttachmentsJson")) await list.fields.addText("AttachmentsJson");
-    if (!have.has("PageUniqueId")) await list.fields.addText("PageUniqueId");
-    if (!have.has("PageName")) await list.fields.addText("PageName");
-  }
+    if (ensure.created) {
+      await list.fields.addMultilineText("Message");
+      await list.fields.addText("MentionsJson");
+      await list.fields.addText("AttachmentsJson");
+      await list.fields.addText("PageUniqueId");
+      await list.fields.addText("PageName");
+    } else {
+      type FieldInfo = { InternalName: string };
+      const fields = await list.fields.select("InternalName")() as FieldInfo[];
+      const have = new Set(fields.map(f => f.InternalName));
+      if (!have.has("Message")) await list.fields.addMultilineText("Message");
+      if (!have.has("MentionsJson")) await list.fields.addText("MentionsJson");
+      if (!have.has("AttachmentsJson")) await list.fields.addText("AttachmentsJson");
+      if (!have.has("PageUniqueId")) await list.fields.addText("PageUniqueId");
+      if (!have.has("PageName")) await list.fields.addText("PageName");
+    }
 
-  // ❗ Sem parênteses aqui — queremos IView, não IViewInfo
-  const defView: IView = list.defaultView;
+    const defView: IView = list.defaultView; // pega IView em vez de IViewInfo
+    const current = await defView.fields();
+    const cols = current.Items as string[];
+    const want = ["Message", "PageName", "Created"];
 
-  // Lê campos atuais da vista
-  const current = await defView.fields();      // IViewFieldsResult
-  const cols = current.Items as string[];
-  const want = ["Message", "PageName", "Created"]; // Created é built-in
-
-  for (const col of want) {
-    if (!cols.includes(col)) {
-      await defView.fields.add(col);          // adiciona à vista
+    for (const col of want) {
+      if (!cols.includes(col)) {
+        await defView.fields.add(col);
+      }
     }
   }
-  // (não é necessário defView.update() após fields.add())
-}
-
-
-
 }

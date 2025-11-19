@@ -111,32 +111,6 @@
   margin-top: 6px;
 }
 
-.emojiGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  padding: 8px;
-  max-width: 220px;
-}
-
-.emojiButton {
-  font-size: 22px;
-  line-height: 1;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  transition: transform 0.1s ease;
-}
-
-.emojiButton:hover,
-.emojiButton:focus {
-  transform: scale(1.15);
-  background: #f3f2f1;
-  outline: none;
-}
-
 .fileInputRow {
   display: flex;
   align-items: center;

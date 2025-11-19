@@ -6,16 +6,18 @@ import type { IChatMessage } from "../../../models/IChatMessage";
 import type { IUserMention } from "../../../models/IUserMention";
 import type { IFileAttachment } from "../../../models/IFileAttachment";
 import { SharePointService } from "../../../services/SharePointService";
+import type { IPageInfo } from "../../../services/SharePointService";
 import { GraphService } from "../../../services/GraphService";
 import { getPageDeepLink } from "../../../utils/pageHelpers";
 import { MentionPicker } from "./MentionPicker";
 import styles from "./Chat.module.scss";
 import { getPlainTextFromHtml, sanitizeRichText } from "../../../utils/richText";
+import EmojiPicker, { type EmojiClickData, Categories } from "emoji-picker-react";
 
 interface Props {
   context: WebPartContext;
   onMessageSent: (m: IChatMessage) => void;
-  pageInfo?: { pageName: string; pageUniqueId: string };
+  pageInfo?: IPageInfo;
 }
 
 interface MentionContext {
@@ -23,25 +25,6 @@ interface MentionContext {
   caretOffset: number;
   tokenLength: number;
 }
-
-const EMOJI_SET: string[] = [
-  "😀",
-  "😁",
-  "😂",
-  "🤣",
-  "😊",
-  "😍",
-  "😎",
-  "🤔",
-  "😢",
-  "😡",
-  "👏",
-  "👍",
-  "🙏",
-  "🎉",
-  "🔥",
-  "💡"
-];
 
 function hasRichFormatting(html: string): boolean {
   if (!html) {
@@ -144,6 +127,18 @@ const fileTriggerButtonStyles: IButtonStyles = {
   }
 };
 
+const EMOJI_CATEGORIES: Array<{ category: Categories; name: string }> = [
+  { category: Categories.SUGGESTED, name: "Mais usados" },
+  { category: Categories.SMILEYS_PEOPLE, name: "Rostos e pessoas" },
+  { category: Categories.ANIMALS_NATURE, name: "Animais e natureza" },
+  { category: Categories.FOOD_DRINK, name: "Comida e bebida" },
+  { category: Categories.TRAVEL_PLACES, name: "Viagens e lugares" },
+  { category: Categories.ACTIVITIES, name: "Atividades" },
+  { category: Categories.OBJECTS, name: "Objetos" },
+  { category: Categories.SYMBOLS, name: "Símbolos" },
+  { category: Categories.FLAGS, name: "Bandeiras" }
+];
+
 export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.Element {
   const [html, setHtml] = React.useState("");
   const [plainText, setPlainText] = React.useState("");
@@ -159,6 +154,7 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
   const editorRef = React.useRef<HTMLDivElement | null>(null);
   const mentionContextRef = React.useRef<MentionContext | null>(null);
   const emojiAnchorRef = React.useRef<HTMLDivElement | null>(null);
+  const lastSelectionRef = React.useRef<Range | null>(null);
   const savedRangeRef = React.useRef<Range | null>(null);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [hasFormatting, setHasFormatting] = React.useState(false);
@@ -345,6 +341,14 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     setHasFormatting(hasRichFormatting(sanitized));
     updateFormattingState();
     detectMentionTrigger();
+
+    const selection = window.getSelection();
+    if (editor && selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (editor.contains(range.startContainer) || editor.contains(range.endContainer)) {
+        lastSelectionRef.current = range.cloneRange();
+      }
+    }
   };
 
   const handleEmojiButtonClick = (): void => {
@@ -354,30 +358,53 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
       return;
     }
 
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      focusEditor();
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
     }
-    const activeSelection = window.getSelection();
-    if (activeSelection && activeSelection.rangeCount > 0) {
-      savedRangeRef.current = activeSelection.getRangeAt(0).cloneRange();
+
+    if (lastSelectionRef.current) {
+      savedRangeRef.current = lastSelectionRef.current.cloneRange();
+    } else if (typeof document !== "undefined") {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      savedRangeRef.current = range;
     }
+
     setEmojiOpen(true);
   };
 
   const insertEmoji = (emoji: string): void => {
-    focusEditor();
-
     const selection = window.getSelection();
     const range = savedRangeRef.current;
+    const editor = editorRef.current;
+
+    if (!editor || typeof document === "undefined") {
+      savedRangeRef.current = null;
+      setEmojiOpen(false);
+      return;
+    }
+
     if (selection && range) {
       selection.removeAllRanges();
       selection.addRange(range);
+    } else if (selection) {
+      const fallbackRange = document.createRange();
+      fallbackRange.selectNodeContents(editor);
+      fallbackRange.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(fallbackRange);
     }
 
-    if (typeof document !== "undefined") {
-      document.execCommand("insertText", false, emoji);
+    editor.focus();
+    document.execCommand("insertText", false, emoji);
+
+    const newSelection = window.getSelection();
+    if (newSelection && newSelection.rangeCount > 0) {
+      lastSelectionRef.current = newSelection.getRangeAt(0).cloneRange();
     }
+
     savedRangeRef.current = null;
     setEmojiOpen(false);
     handleEditorInput();
@@ -482,11 +509,27 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
   const handleEditorKeyUp = (): void => {
     detectMentionTrigger();
     updateFormattingState();
+    const selection = window.getSelection();
+    const editor = editorRef.current;
+    if (editor && selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (editor.contains(range.startContainer) || editor.contains(range.endContainer)) {
+        lastSelectionRef.current = range.cloneRange();
+      }
+    }
   };
 
   const handleEditorMouseUp = (): void => {
     detectMentionTrigger();
     updateFormattingState();
+    const selection = window.getSelection();
+    const editor = editorRef.current;
+    if (editor && selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (editor.contains(range.startContainer) || editor.contains(range.endContainer)) {
+        lastSelectionRef.current = range.cloneRange();
+      }
+    }
   };
 
   const applyCommand = (command: string, value?: string): void => {
@@ -561,18 +604,17 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
             role="dialog"
             gapSpace={4}
           >
-            <div className={styles.emojiGrid}>
-              {EMOJI_SET.map(symbol => (
-                <button
-                  key={symbol}
-                  type="button"
-                  className={styles.emojiButton}
-                  onClick={() => insertEmoji(symbol)}
-                >
-                  {symbol}
-                </button>
-              ))}
-            </div>
+            <EmojiPicker
+              onEmojiClick={(emojiData: EmojiClickData) => insertEmoji(emojiData.emoji)}
+              lazyLoadEmojis
+              width={320}
+              searchPlaceHolder="Pesquisar"
+              categories={EMOJI_CATEGORIES}
+              previewConfig={{
+                defaultCaption: "Seleciona um emoji",
+                showPreview: false
+              }}
+            />
           </Callout>
         )}
         <div className={styles.richEditorWrapper}>
@@ -647,5 +689,3 @@ export function MessageInput({ context, onMessageSent, pageInfo }: Props): JSX.E
     </Stack>
   );
 }
-
-

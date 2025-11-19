@@ -12,6 +12,12 @@ import "@pnp/sp/site-users/web";
 
 const ATTACHMENTS_LIBRARY_TITLE = "Anexos dos Chats";
 
+export interface IPageInfo {
+  pageName: string;
+  pageUniqueId: string;
+  folderName: string;
+}
+
 interface ISharePointError {
   status?: number;
   message?: string;
@@ -37,6 +43,22 @@ function toSharePointError(error: unknown): ISharePointError {
     return error as ISharePointError;
   }
   return {};
+}
+
+function sanitizeFolderName(value: string): string {
+  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const withoutExtension = normalized.replace(/\.[^/.]+$/, "");
+  const cleaned = withoutExtension
+    .replace(/[^a-zA-Z0-9\-_. ]+/g, " ")
+    .trim()
+    .replace(/\s+/g, "-");
+  return cleaned || "pagina";
+}
+
+function getPathSegment(path: string): string {
+  const noQuery = path.split("?")[0];
+  const segments = noQuery.split("/").filter(Boolean);
+  return segments.length ? segments[segments.length - 1] : "pagina";
 }
 
 export class SharePointService {
@@ -71,35 +93,50 @@ export class SharePointService {
     }
   }
 
-  static async getPageInfo(context: WebPartContext): Promise<{ pageName: string; pageUniqueId: string }> {
-    const listItem = context?.pageContext?.listItem as { title?: string; uniqueId?: string } | undefined;
-    if (listItem?.title && listItem?.uniqueId) {
-      return {
-        pageName: String(listItem.title),
-        pageUniqueId: String(listItem.uniqueId)
-      };
-    }
+  static async getPageInfo(context: WebPartContext): Promise<IPageInfo> {
+    const legacy = context?.pageContext?.legacyPageContext as Record<string, unknown> | undefined;
+    const listItem = context?.pageContext?.listItem as Record<string, unknown> | undefined;
+    const listItemAllFields = (context as unknown as { pageContext?: { listItemAllFields?: Record<string, unknown> } })
+      ?.pageContext?.listItemAllFields;
 
-    const path =
-      context?.pageContext?.site?.serverRequestPath ||
-      (typeof window !== "undefined" ? window.location.pathname + window.location.search : "/");
+    const uniqueCandidates = [
+      listItemAllFields?.UniqueId,
+      listItem?.uniqueId,
+      legacy?.listItemUniqueId,
+      legacy?.uniqueId
+    ].filter(Boolean);
 
-    const isWorkbench = /\/workbench\.aspx/i.test(path);
-    const pageName =
-      (isWorkbench
-        ? "Workbench"
-        : context?.pageContext?.web?.title || (typeof document !== "undefined" ? document.title : "Página")) || "Página";
+    const rawPath =
+      (typeof window !== "undefined" ? window.location.pathname + window.location.search : "") ||
+      (typeof legacy?.serverRequestPath === "string" ? (legacy.serverRequestPath as string) : "") ||
+      context?.pageContext?.web?.serverRelativeUrl ||
+      "/";
 
-    const pageUniqueId = path || pageName;
+    const decodedPath = decodeURIComponent(rawPath);
+    const pathSegment = getPathSegment(decodedPath);
+    const folderName = sanitizeFolderName(pathSegment);
 
-    return { pageName, pageUniqueId };
+    const displayName =
+      (listItem?.title as string | undefined) ||
+      (listItemAllFields?.Title as string | undefined) ||
+      (legacy?.itemTitle as string | undefined) ||
+      (typeof document !== "undefined" ? document.title : undefined) ||
+      folderName;
+
+    const pageUniqueId = uniqueCandidates.length ? String(uniqueCandidates[0]) : decodedPath;
+
+    return {
+      pageName: displayName,
+      pageUniqueId,
+      folderName
+    };
   }
 
   static async ensurePageFolder(context: WebPartContext): Promise<string> {
     const sp = SetupService.sp();
-    const { pageName } = await this.getPageInfo(context);
+    const { folderName } = await this.getPageInfo(context);
     const libraryRoot = await this.ensureAttachmentsLibrary();
-    const targetUrl = `${libraryRoot.replace(/\/$/, "")}/${pageName}`;
+    const targetUrl = `${libraryRoot.replace(/\/$/, "")}/${folderName}`;
 
     try {
       const info = await sp.web.getFolderByServerRelativePath(targetUrl)();
@@ -119,13 +156,13 @@ export class SharePointService {
 
     try {
       const parent = sp.web.getFolderByServerRelativePath(libraryRoot);
-      await parent.folders.addUsingPath(pageName);
+      await parent.folders.addUsingPath(folderName);
     } catch (err) {
       const spError = toSharePointError(err);
       if (!(spError.status === 409 || /already exists/i.test(spError.message || ""))) {
         if (spError.status === 403) {
           throw new Error(
-            `Sem permissão para criar a pasta "${pageName}" em "${ATTACHMENTS_LIBRARY_TITLE}". ` +
+            `Sem permissão para criar a pasta "${folderName}" em "${ATTACHMENTS_LIBRARY_TITLE}". ` +
             `Precisas de 'Edit'.`
           );
         }
@@ -224,15 +261,22 @@ export class SharePointService {
     return result.data?.Id as number;
   }
 
-  static async getMessages(pageUniqueId: string): Promise<IChatMessage[]> {
+  static async getMessages(pageUniqueId: string, options?: { afterId?: number }): Promise<IChatMessage[]> {
     const sp = SetupService.sp();
+    const escapedId = pageUniqueId.replace(/'/g, "''");
+    const filterParts = [`PageUniqueId eq '${escapedId}'`];
+    const afterId = options?.afterId;
+    if (typeof afterId === "number" && afterId > 0) {
+      filterParts.push(`Id gt ${afterId}`);
+    }
+
     const items = await sp.web.lists
       .getByTitle("Chat Messages")
       .items.select(
         "Id,Title,Message,MentionsJson,AttachmentsJson,Created,PageUniqueId,PageName,Author/Id,Author/Title,Author/EMail"
       )
       .expand("Author")
-      .filter(`PageUniqueId eq '${pageUniqueId}'`)
+      .filter(filterParts.join(" and "))
       .orderBy("Id", true)();
 
     return items.map((item: IChatListItem) => ({
@@ -251,3 +295,5 @@ export class SharePointService {
     }));
   }
 }
+
+

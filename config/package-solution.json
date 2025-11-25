@@ -1,9 +1,9 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
   "solution": {
-    "name": "sp-fx-chat-client-side-solution",
+    "name": "sp-fx-pedidos-client-side-solution",
     "id": "38e91b24-8d39-47fc-97d8-1ff074643546",
-    "version": "1.0.0.1",
+    "version": "1.0.0.2",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,
@@ -16,10 +16,10 @@
     },
     "metadata": {
       "shortDescription": {
-        "default": "SPFx-Chat description"
+        "default": "SPFxPedidos description"
       },
       "longDescription": {
-        "default": "SPFx-Chat description"
+        "default": "SPFxPedidos description"
       },
       "screenshotPaths": [],
       "videoUrl": "",
@@ -27,10 +27,10 @@
     },
     "features": [
       {
-        "title": "sp-fx-chat Feature",
-        "description": "The feature that activates elements of the sp-fx-chat solution.",
+        "title": "sp-fx-pedidos Feature",
+        "description": "The feature that activates elements of the sp-fx-pedidos solution.",
         "id": "6a2604e7-d43d-49c4-b506-4284501e66ae",
-        "version": "1.0.0.1"
+        "version": "1.0.0.2"
       }
     ],
     "webApiPermissionRequests": [
@@ -39,6 +39,6 @@
     ]
   },
   "paths": {
-    "zippedPackage": "solution/sp-fx-chat.sppkg"
+    "zippedPackage": "solution/sp-fx-pedidos.sppkg"
   }
 }
